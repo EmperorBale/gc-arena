@@ -1,3 +1,4 @@
+use alloc::rc::Rc;
 use core::cell::{Cell, UnsafeCell};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
@@ -13,6 +14,7 @@ pub(crate) enum GcColor {
 
 pub(crate) struct GcBox<T: Collect + ?Sized> {
     pub(crate) flags: GcFlags,
+    pub(crate) alive_flag: Option<Rc<Cell<bool>>>,
     pub(crate) next: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
     pub(crate) value: UnsafeCell<T>,
 }

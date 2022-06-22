@@ -1,3 +1,5 @@
+use alloc::rc::Rc;
+use core::cell::Cell;
 use core::fmt::{self, Debug};
 use core::marker::PhantomData;
 use core::ops::Deref;
@@ -5,6 +7,7 @@ use core::ptr::NonNull;
 
 use crate::collect::Collect;
 use crate::context::{CollectionContext, MutationContext};
+use crate::gc_weak::GcWeak;
 use crate::types::{GcBox, Invariant};
 
 /// A garbage collected pointer to a type T.  Implements Copy, and is implemented as a plain machine
@@ -54,6 +57,21 @@ impl<'gc, T: 'gc + Collect> Gc<'gc, T> {
         Gc {
             ptr: unsafe { mc.allocate(t) },
             _invariant: PhantomData,
+        }
+    }
+
+    pub fn downgrade(mut this: Gc<'gc, T>) -> GcWeak<'gc, T> {
+        unsafe {
+            let alive_flag = this
+                .ptr
+                .as_mut()
+                .alive_flag
+                .get_or_insert_with(|| Rc::new(Cell::new(true)));
+
+            GcWeak {
+                alive: alive_flag.clone(),
+                inner: this,
+            }
         }
     }
 

@@ -211,6 +211,9 @@ impl Context {
                             work_done += sweep_size as f64;
                             self.allocation_debt
                                 .set((self.allocation_debt.get() - sweep_size as f64).max(0.0));
+                            if let Some(alive_flag) = sweep.alive_flag.as_ref() {
+                                alive_flag.set(false);
+                            }
                             Box::from_raw(sweep_ptr.as_ptr());
                         } else {
                             // If the next object in the sweep portion of the main list is black, we
@@ -282,6 +285,7 @@ impl Context {
             uninitialized.as_mut_ptr(),
             GcBox {
                 flags: flags,
+                alive_flag: None,
                 next: Cell::new(self.all.get()),
                 value: UnsafeCell::new(t),
             },

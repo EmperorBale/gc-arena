@@ -14,6 +14,7 @@ mod collect_impl;
 mod context;
 mod gc;
 mod gc_cell;
+mod gc_weak;
 mod no_drop;
 mod static_collect;
 mod types;
