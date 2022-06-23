@@ -25,6 +25,7 @@ pub use self::{
     context::{CollectionContext, Context, MutationContext},
     gc::Gc,
     gc_cell::GcCell,
+    gc_weak::GcWeak,
     no_drop::MustNotImplDrop,
     static_collect::StaticCollect,
 };
