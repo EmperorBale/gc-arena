@@ -62,7 +62,7 @@ impl GcFlags {
 
     #[inline]
     pub(crate) fn alive(&self) -> bool {
-        self.0.get() & 0x16 != 0x0
+        self.0.get() & 0x10 != 0x0
     }
 
     #[inline]
@@ -80,7 +80,7 @@ impl GcFlags {
     #[inline]
     pub(crate) fn set_alive(&self, alive: bool) {
         self.0
-            .set((self.0.get() & !0x16) | if alive { 0x16 } else { 0x0 });
+            .set((self.0.get() & !0x10) | if alive { 0x10 } else { 0x0 });
     }
 }
 
