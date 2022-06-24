@@ -42,6 +42,10 @@ impl<'gc, T: 'gc + Collect> GcCell<'gc, T> {
         ))
     }
 
+    pub(crate) unsafe fn get_inner(&self) -> Gc<'gc, GcRefCell<T>> {
+        self.0
+    }
+
     pub fn ptr_eq(this: GcCell<'gc, T>, other: GcCell<'gc, T>) -> bool {
         this.as_ptr() == other.as_ptr()
     }
@@ -76,7 +80,7 @@ impl<'gc, T: 'gc + Collect> GcCell<'gc, T> {
     }
 }
 
-struct GcRefCell<T: Collect> {
+pub(crate) struct GcRefCell<T: Collect> {
     cell: RefCell<T>,
 }
 
