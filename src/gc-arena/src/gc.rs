@@ -1,5 +1,3 @@
-use alloc::rc::Rc;
-use core::cell::Cell;
 use core::fmt::{self, Debug};
 use core::marker::PhantomData;
 use core::ops::Deref;
@@ -60,19 +58,8 @@ impl<'gc, T: 'gc + Collect> Gc<'gc, T> {
         }
     }
 
-    pub fn downgrade(mut this: Gc<'gc, T>) -> GcWeak<'gc, T> {
-        unsafe {
-            let alive_flag = this
-                .ptr
-                .as_mut()
-                .alive_flag
-                .get_or_insert_with(|| Rc::new(Cell::new(true)));
-
-            GcWeak {
-                alive: alive_flag.clone(),
-                inner: this,
-            }
-        }
+    pub fn downgrade(this: Gc<'gc, T>) -> GcWeak<'gc, T> {
+        GcWeak { inner: this }
     }
 
     /// When implementing `Collect` on types with internal mutability containing `Gc` pointers, this

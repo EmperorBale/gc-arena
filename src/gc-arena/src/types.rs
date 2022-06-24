@@ -1,4 +1,3 @@
-use alloc::rc::Rc;
 use core::cell::{Cell, UnsafeCell};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
@@ -14,7 +13,6 @@ pub(crate) enum GcColor {
 
 pub(crate) struct GcBox<T: Collect + ?Sized> {
     pub(crate) flags: GcFlags,
-    pub(crate) alive_flag: Option<Rc<Cell<bool>>>,
     pub(crate) next: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
     pub(crate) value: UnsafeCell<T>,
 }
@@ -58,9 +56,31 @@ impl GcFlags {
     }
 
     #[inline]
+    pub(crate) fn has_weak_ref(&self) -> bool {
+        self.0.get() & 0x8 != 0x0
+    }
+
+    #[inline]
+    pub(crate) fn alive(&self) -> bool {
+        self.0.get() & 0x16 != 0x0
+    }
+
+    #[inline]
     pub(crate) fn set_needs_trace(&self, needs_trace: bool) {
         self.0
             .set((self.0.get() & !0x4) | if needs_trace { 0x4 } else { 0x0 });
+    }
+
+    #[inline]
+    pub(crate) fn set_has_weak_ref(&self, has_weak_ref: bool) {
+        self.0
+            .set((self.0.get() & !0x8) | if has_weak_ref { 0x8 } else { 0x0 });
+    }
+
+    #[inline]
+    pub(crate) fn set_alive(&self, alive: bool) {
+        self.0
+            .set((self.0.get() & !0x16) | if alive { 0x16 } else { 0x0 });
     }
 }
 

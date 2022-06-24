@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::alloc::Layout;
 use core::cell::{Cell, RefCell, UnsafeCell};
 use core::marker::PhantomData;
 use core::mem;
@@ -185,8 +186,8 @@ impl Context {
                     }
                 }
                 Phase::Sweep => {
-                    if let Some(sweep_ptr) = self.sweep.get() {
-                        let sweep = sweep_ptr.as_ref();
+                    if let Some(mut sweep_ptr) = self.sweep.get() {
+                        let sweep = sweep_ptr.as_mut();
                         let sweep_size = mem::size_of_val(sweep);
 
                         let next_ptr = sweep.next.get();
@@ -196,6 +197,16 @@ impl Context {
                         // the main list and destruct it, otherwise it should be black, and we
                         // simply turn it white again.
                         if sweep.flags.color() == GcColor::White {
+                            if sweep.flags.has_weak_ref() {
+                                self.sweep_prev.set(Some(sweep_ptr));
+                                if sweep.flags.alive() {
+                                    sweep.flags.set_alive(false);
+                                    // SAFETY: Since this object is white, that means there are no more strong pointers
+                                    // to this object, only weak pointers, so we can safely drop its contents.
+                                    core::ptr::drop_in_place(sweep.value.get_mut());
+                                }
+                                continue;
+                            }
                             // If the next object in the sweep portion of the main list is white, we
                             // need to remove it from the main object list and destruct it.
                             if let Some(sweep_prev) = self.sweep_prev.get() {
@@ -211,10 +222,18 @@ impl Context {
                             work_done += sweep_size as f64;
                             self.allocation_debt
                                 .set((self.allocation_debt.get() - sweep_size as f64).max(0.0));
-                            if let Some(alive_flag) = sweep.alive_flag.as_ref() {
-                                alive_flag.set(false);
+                            if sweep.flags.alive() {
+                                // If the alive flag is set, that means we havn't dropped the inner value of this object,
+                                // so it is safe to drop normally.
+                                Box::from_raw(sweep_ptr.as_ptr());
+                            } else {
+                                // If the alive flag is not set, then that means we have already dropped the inner value,
+                                // so we only need to free the GcBox.
+                                alloc::alloc::dealloc(
+                                    sweep_ptr.as_ptr().cast(),
+                                    Layout::for_value(sweep),
+                                );
                             }
-                            Box::from_raw(sweep_ptr.as_ptr());
                         } else {
                             // If the next object in the sweep portion of the main list is black, we
                             // need to keep it but turn it back white.  No gray objects should be in
@@ -225,6 +244,7 @@ impl Context {
                             self.sweep_prev.set(Some(sweep_ptr));
                             self.remembered_size
                                 .set(self.remembered_size.get() + sweep_size);
+                            sweep.flags.set_has_weak_ref(false);
                             sweep.flags.set_color(GcColor::White);
                         }
                     } else {
@@ -268,6 +288,7 @@ impl Context {
         }
 
         let flags = GcFlags::new();
+        flags.set_alive(true);
         flags.set_needs_trace(T::needs_trace());
 
         // Make the generated code easier to optimize into `T` being constructed in place or at the
@@ -285,7 +306,6 @@ impl Context {
             uninitialized.as_mut_ptr(),
             GcBox {
                 flags: flags,
-                alive_flag: None,
                 next: Cell::new(self.all.get()),
                 value: UnsafeCell::new(t),
             },
