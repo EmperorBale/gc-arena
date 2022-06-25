@@ -379,28 +379,13 @@ impl Context {
             return false;
         }
 
-        // If the object is gray or black, we can assume it is safe to upgrade.
-        if gc_box.flags.color() != GcColor::White {
-            return true;
-        }
-        match self.phase.get() {
-            Phase::Propagate => {
-                // If we are in the propagate phase and the object is white, there are 2 possibilites:
-                // 1. The object isn't on the root
-                // 2. We havn't traced the object yet
-                // It is not possible to know which possibility is occurring right now, so we have to play it safe
-                // by marking this object as gray and putting it in the gray again queue.
-                gc_box.flags.set_color(GcColor::Gray);
-                self.gray_again.borrow_mut().push(static_gc_box(ptr));
-            }
-            Phase::Sweep => {
-                // If we the object is white, we are sweepable, and we are in the sweep phase, that means
-                // this object is going to be swept soon, so we cannot upgrade.
-                if gc_box.flags.sweepable() {
-                    return false;
-                }
-            }
-            _ => (),
+        // If we are in the sweep phase, the color is white, and it is sweepable, then that means this object will
+        // be swept soon, so we cannot upgrade.
+        if self.phase.get() == Phase::Sweep
+            && gc_box.flags.color() == GcColor::White
+            && gc_box.flags.sweepable()
+        {
+            return false;
         }
         true
     }
