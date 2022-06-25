@@ -1,5 +1,5 @@
-use crate::collect::Collect;
 use crate::GcCell;
+use crate::{collect::Collect, MutationContext};
 
 use core::fmt::{self, Debug};
 
@@ -35,15 +35,7 @@ unsafe impl<'gc, T: 'gc + Collect> Collect for GcWeakCell<'gc, T> {
 }
 
 impl<'gc, T: Collect + 'gc> GcWeakCell<'gc, T> {
-    pub fn upgrade(&self) -> Option<GcCell<'gc, T>> {
-        unsafe {
-            self.inner
-                .get_inner()
-                .ptr
-                .as_ref()
-                .flags
-                .alive()
-                .then(|| self.inner)
-        }
+    pub fn upgrade(&self, mc: MutationContext<'gc, '_>) -> Option<GcCell<'gc, T>> {
+        unsafe { mc.upgrade(self.inner.get_inner().ptr).then(|| self.inner) }
     }
 }

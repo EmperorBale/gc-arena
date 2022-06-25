@@ -1,5 +1,6 @@
 use crate::collect::Collect;
 use crate::gc::Gc;
+use crate::{CollectionContext, MutationContext};
 
 use core::fmt::{self, Debug};
 
@@ -22,7 +23,7 @@ impl<'gc, T: 'gc + Collect> Debug for GcWeak<'gc, T> {
 }
 
 unsafe impl<'gc, T: 'gc + Collect> Collect for GcWeak<'gc, T> {
-    fn trace(&self, _cc: crate::CollectionContext) {
+    fn trace(&self, _cc: CollectionContext) {
         unsafe {
             self.inner.ptr.as_ref().flags.set_has_weak_ref(true);
         }
@@ -30,7 +31,7 @@ unsafe impl<'gc, T: 'gc + Collect> Collect for GcWeak<'gc, T> {
 }
 
 impl<'gc, T: Collect + 'gc> GcWeak<'gc, T> {
-    pub fn upgrade(&self) -> Option<Gc<'gc, T>> {
-        unsafe { self.inner.ptr.as_ref().flags.alive().then(|| self.inner) }
+    pub fn upgrade(&self, mc: MutationContext<'gc, '_>) -> Option<Gc<'gc, T>> {
+        unsafe { mc.upgrade(self.inner.ptr).then(|| self.inner) }
     }
 }

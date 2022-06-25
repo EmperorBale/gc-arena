@@ -26,6 +26,10 @@ impl<'gc, 'context> MutationContext<'gc, 'context> {
     pub(crate) unsafe fn write_barrier<T: 'gc + Collect>(self, ptr: NonNull<GcBox<T>>) {
         self.context.write_barrier(ptr)
     }
+
+    pub(crate) unsafe fn upgrade<T: 'gc + Collect>(self, ptr: NonNull<GcBox<T>>) -> bool {
+        self.context.upgrade(ptr)
+    }
 }
 
 /// Handle value given by arena callbacks during garbage collection, which must be passed through
@@ -128,6 +132,23 @@ impl Context {
         }
     }
 
+    pub fn mark_sweepable(&self) {
+        let mut current = self.all.get();
+
+        while let Some(obj) = current {
+            unsafe {
+                let obj_ptr = obj.as_ref();
+                if obj_ptr.flags.sweepable() {
+                    break;
+                }
+
+                obj_ptr.flags.set_sweepable(true);
+
+                current = obj_ptr.next.get();
+            }
+        }
+    }
+
     // Do some collection work until we have either reached the target amount of work or are in the
     // sleeping gc phase.  The unit of "work" here is a byte count of objects either turned black or
     // freed, so to completely collect a heap with 1000 bytes of objects should take 1000 units of
@@ -171,7 +192,7 @@ impl Context {
                     } else {
                         None
                     };
-
+                    self.mark_sweepable();
                     if let Some(ptr) = next_gray {
                         // If we have an object in the gray queue, take one, trace it, and turn it
                         // black.
@@ -205,6 +226,7 @@ impl Context {
                                     // to this object, only weak pointers, so we can safely drop its contents.
                                     core::ptr::drop_in_place(sweep.value.get_mut());
                                 }
+                                sweep.flags.set_has_weak_ref(false);
                                 continue;
                             }
                             // If the next object in the sweep portion of the main list is white, we
@@ -347,6 +369,40 @@ impl Context {
                 }
             }
         }
+    }
+
+    unsafe fn upgrade<T: Collect>(&self, ptr: NonNull<GcBox<T>>) -> bool {
+        let gc_box = ptr.as_ref();
+
+        // This object has already been freed, definitely not safe to upgrade.
+        if !gc_box.flags.alive() {
+            return false;
+        }
+
+        // If the object is gray or black, we can assume it is safe to upgrade.
+        if gc_box.flags.color() != GcColor::White {
+            return true;
+        }
+        match self.phase.get() {
+            Phase::Propagate => {
+                // If we are in the propagate phase and the object is white, there are 2 possibilites:
+                // 1. The object isn't on the root
+                // 2. We havn't traced the object yet
+                // It is not possible to know which possibility is occurring right now, so we have to play it safe
+                // by marking this object as gray and putting it in the gray again queue.
+                gc_box.flags.set_color(GcColor::Gray);
+                self.gray_again.borrow_mut().push(static_gc_box(ptr));
+            }
+            Phase::Sweep => {
+                // If we the object is white, we are sweepable, and we are in the sweep phase, that means
+                // this object is going to be swept soon, so we cannot upgrade.
+                if gc_box.flags.sweepable() {
+                    return false;
+                }
+            }
+            _ => (),
+        }
+        true
     }
 }
 
