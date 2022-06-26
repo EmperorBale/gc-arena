@@ -48,15 +48,15 @@ fn weak_allocation() {
     arena.mutate(|mc, root| {
         assert!(root
             .weak
-            .upgrade()
+            .upgrade(mc)
             .map(|gc| Gc::ptr_eq(gc, root.test.read().unwrap()))
             .unwrap_or(false));
 
         *root.test.write(mc) = None;
     });
     arena.collect_all();
-    arena.mutate(|_mc, root| {
-        assert!((*root).weak.upgrade().is_none());
+    arena.mutate(|mc, root| {
+        assert!((*root).weak.upgrade(mc).is_none());
     });
 }
 
