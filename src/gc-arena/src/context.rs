@@ -207,8 +207,8 @@ impl Context {
                     }
                 }
                 Phase::Sweep => {
-                    if let Some(mut sweep_ptr) = self.sweep.get() {
-                        let sweep = sweep_ptr.as_mut();
+                    if let Some(sweep_ptr) = self.sweep.get() {
+                        let sweep = sweep_ptr.as_ref();
                         let sweep_size = mem::size_of_val(sweep);
 
                         let next_ptr = sweep.next.get();
@@ -220,13 +220,13 @@ impl Context {
                         if sweep.flags.color() == GcColor::White {
                             if sweep.flags.has_weak_ref() {
                                 self.sweep_prev.set(Some(sweep_ptr));
+                                sweep.flags.set_has_weak_ref(false);
                                 if sweep.flags.alive() {
                                     sweep.flags.set_alive(false);
                                     // SAFETY: Since this object is white, that means there are no more strong pointers
                                     // to this object, only weak pointers, so we can safely drop its contents.
-                                    core::ptr::drop_in_place(sweep.value.get_mut());
+                                    core::ptr::drop_in_place(sweep.value.get());
                                 }
-                                sweep.flags.set_has_weak_ref(false);
                                 continue;
                             }
                             // If the next object in the sweep portion of the main list is white, we
