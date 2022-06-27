@@ -11,7 +11,7 @@ impl<'gc, T: Collect + 'gc> Copy for GcWeakCell<'gc, T> {}
 
 impl<'gc, T: Collect + 'gc> Clone for GcWeakCell<'gc, T> {
     fn clone(&self) -> GcWeakCell<'gc, T> {
-        Self { inner: self.inner }
+        *self
     }
 }
 
