@@ -371,6 +371,10 @@ impl Context {
         }
     }
 
+    /// Determines whether or not a Gc pointer is safe to be upgraded.
+    /// This is used by weak pointers to determine if it can safely upgrade to a strong pointer.
+    ///
+    /// Safety: `ptr` must be a valid pointer to a GcBox<T>.
     unsafe fn upgrade<T: Collect>(&self, ptr: NonNull<GcBox<T>>) -> bool {
         let gc_box = ptr.as_ref();
 
