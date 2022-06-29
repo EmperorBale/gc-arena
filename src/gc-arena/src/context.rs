@@ -55,7 +55,7 @@ pub struct Context {
     remembered_size: Cell<usize>,
     wakeup_total: Cell<usize>,
     allocation_debt: Cell<f64>,
-    sweep_id: Cell<usize>,
+    sweep_id: Cell<u64>,
 
     all: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
     sweep: Cell<Option<NonNull<GcBox<dyn Collect>>>>,

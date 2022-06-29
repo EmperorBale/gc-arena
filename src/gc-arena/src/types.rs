@@ -13,7 +13,7 @@ pub(crate) enum GcColor {
 
 pub(crate) struct GcBox<T: Collect + ?Sized> {
     pub(crate) flags: GcFlags,
-    pub(crate) sweep_id: usize,
+    pub(crate) sweep_id: u64,
     pub(crate) next: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
     pub(crate) value: UnsafeCell<T>,
 }
