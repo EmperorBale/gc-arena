@@ -187,7 +187,8 @@ impl Context {
                     } else {
                         // If we have no objects left in the normal gray queue, we enter the sweep
                         // phase.
-                        self.sweep_id.set(self.sweep_id.get() + 1);
+                        self.sweep_id
+                            .set(self.sweep_id.get().checked_add(1).expect("GC overflow"));
                         self.phase.set(Phase::Sweep);
                         self.sweep.set(self.all.get());
                     }
