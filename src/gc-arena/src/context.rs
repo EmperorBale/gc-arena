@@ -55,7 +55,7 @@ pub struct Context {
     remembered_size: Cell<usize>,
     wakeup_total: Cell<usize>,
     allocation_debt: Cell<f64>,
-    sweep_id: Cell<u64>,
+    sweep_switch: Cell<bool>,
 
     all: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
     sweep: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
@@ -97,7 +97,7 @@ impl Context {
             remembered_size: Cell::new(0),
             wakeup_total: Cell::new(0),
             allocation_debt: Cell::new(0.0),
-            sweep_id: Cell::new(0),
+            sweep_switch: Cell::new(false),
             all: Cell::new(None),
             sweep: Cell::new(None),
             sweep_prev: Cell::new(None),
@@ -187,8 +187,7 @@ impl Context {
                     } else {
                         // If we have no objects left in the normal gray queue, we enter the sweep
                         // phase.
-                        self.sweep_id
-                            .set(self.sweep_id.get().checked_add(1).expect("GC overflow"));
+                        self.sweep_switch.set(!self.sweep_switch.get());
                         self.phase.set(Phase::Sweep);
                         self.sweep.set(self.all.get());
                     }
@@ -254,6 +253,7 @@ impl Context {
                             self.remembered_size
                                 .set(self.remembered_size.get() + sweep_size);
                             sweep.flags.set_has_weak_ref(false);
+                            sweep.flags.set_switch(self.sweep_switch.get());
                             sweep.flags.set_color(GcColor::White);
                         }
                     } else {
@@ -298,6 +298,7 @@ impl Context {
 
         let flags = GcFlags::new();
         flags.set_alive(true);
+        flags.set_switch(self.sweep_switch.get());
         flags.set_needs_trace(T::needs_trace());
 
         // Make the generated code easier to optimize into `T` being constructed in place or at the
@@ -315,7 +316,6 @@ impl Context {
             uninitialized.as_mut_ptr(),
             GcBox {
                 flags: flags,
-                sweep_id: self.sweep_id.get(),
                 next: Cell::new(self.all.get()),
                 value: UnsafeCell::new(t),
             },
@@ -375,7 +375,7 @@ impl Context {
         // be swept soon, so we cannot upgrade.
         if self.phase.get() == Phase::Sweep
             && gc_box.flags.color() == GcColor::White
-            && gc_box.sweep_id < self.sweep_id.get()
+            && gc_box.flags.switch() != self.sweep_switch.get()
         {
             return false;
         }
