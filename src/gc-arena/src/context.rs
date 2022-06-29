@@ -55,6 +55,7 @@ pub struct Context {
     remembered_size: Cell<usize>,
     wakeup_total: Cell<usize>,
     allocation_debt: Cell<f64>,
+    sweep_id: Cell<usize>,
 
     all: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
     sweep: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
@@ -96,6 +97,7 @@ impl Context {
             remembered_size: Cell::new(0),
             wakeup_total: Cell::new(0),
             allocation_debt: Cell::new(0.0),
+            sweep_id: Cell::new(0),
             all: Cell::new(None),
             sweep: Cell::new(None),
             sweep_prev: Cell::new(None),
@@ -129,23 +131,6 @@ impl Context {
     pub fn wake(&self) {
         if self.phase.get() == Phase::Sleep {
             self.phase.set(Phase::Wake);
-        }
-    }
-
-    pub fn mark_sweepable(&self) {
-        let mut current = self.all.get();
-
-        while let Some(obj) = current {
-            unsafe {
-                let obj_ptr = obj.as_ref();
-                if obj_ptr.flags.sweepable() {
-                    break;
-                }
-
-                obj_ptr.flags.set_sweepable(true);
-
-                current = obj_ptr.next.get();
-            }
         }
     }
 
@@ -192,7 +177,7 @@ impl Context {
                     } else {
                         None
                     };
-                    self.mark_sweepable();
+
                     if let Some(ptr) = next_gray {
                         // If we have an object in the gray queue, take one, trace it, and turn it
                         // black.
@@ -202,6 +187,7 @@ impl Context {
                     } else {
                         // If we have no objects left in the normal gray queue, we enter the sweep
                         // phase.
+                        self.sweep_id.set(self.sweep_id.get() + 1);
                         self.phase.set(Phase::Sweep);
                         self.sweep.set(self.all.get());
                     }
@@ -328,6 +314,7 @@ impl Context {
             uninitialized.as_mut_ptr(),
             GcBox {
                 flags: flags,
+                sweep_id: self.sweep_id.get(),
                 next: Cell::new(self.all.get()),
                 value: UnsafeCell::new(t),
             },
@@ -387,7 +374,7 @@ impl Context {
         // be swept soon, so we cannot upgrade.
         if self.phase.get() == Phase::Sweep
             && gc_box.flags.color() == GcColor::White
-            && gc_box.flags.sweepable()
+            && gc_box.sweep_id < self.sweep_id.get()
         {
             return false;
         }

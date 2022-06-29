@@ -13,6 +13,7 @@ pub(crate) enum GcColor {
 
 pub(crate) struct GcBox<T: Collect + ?Sized> {
     pub(crate) flags: GcFlags,
+    pub(crate) sweep_id: usize,
     pub(crate) next: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
     pub(crate) value: UnsafeCell<T>,
 }
@@ -66,11 +67,6 @@ impl GcFlags {
     }
 
     #[inline]
-    pub(crate) fn sweepable(&self) -> bool {
-        self.0.get() & 0x20 != 0x0
-    }
-
-    #[inline]
     pub(crate) fn set_needs_trace(&self, needs_trace: bool) {
         self.0
             .set((self.0.get() & !0x4) | if needs_trace { 0x4 } else { 0x0 });
@@ -86,11 +82,6 @@ impl GcFlags {
     pub(crate) fn set_alive(&self, alive: bool) {
         self.0
             .set((self.0.get() & !0x10) | if alive { 0x10 } else { 0x0 });
-    }
-
-    pub(crate) fn set_sweepable(&self, sweepable: bool) {
-        self.0
-            .set((self.0.get() & !0x20) | if sweepable { 0x20 } else { 0x0 });
     }
 }
 
