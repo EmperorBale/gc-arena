@@ -50,6 +50,10 @@ impl<'gc, T: 'gc + Collect> GcCell<'gc, T> {
         self.0.cell.as_ptr()
     }
 
+    pub fn make_static(mc: MutationContext<'gc, '_>, this: GcCell<'gc, T>) {
+        Gc::make_static(mc, this.0)
+    }
+
     #[track_caller]
     pub fn read<'a>(&'a self) -> Ref<'a, T> {
         self.0.cell.borrow()

@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use alloc::rc::Rc;
 use alloc::vec::Vec;
 use core::cell::{Cell, RefCell, UnsafeCell};
 use core::marker::PhantomData;
@@ -25,6 +26,17 @@ impl<'gc, 'context> MutationContext<'gc, 'context> {
     pub(crate) unsafe fn write_barrier<T: 'gc + Collect>(self, ptr: NonNull<GcBox<T>>) {
         self.context.write_barrier(ptr)
     }
+
+    pub(crate) unsafe fn make_static<T: 'gc + Collect>(self, ptr: NonNull<GcBox<T>>) {
+        self.context
+            .static_list
+            .borrow_mut()
+            .push(static_gc_box(ptr));
+    }
+
+    pub fn shared_data(self) -> Rc<RefCell<SharedGcData>> {
+        self.context.shared.clone()
+    }
 }
 
 /// Handle value given by arena callbacks during garbage collection, which must be passed through
@@ -44,12 +56,14 @@ impl<'context> CollectionContext<'context> {
 #[doc(hidden)]
 pub struct Context {
     parameters: ArenaParameters,
+    shared: Rc<RefCell<SharedGcData>>,
 
     phase: Cell<Phase>,
     total_allocated: Cell<usize>,
     remembered_size: Cell<usize>,
     wakeup_total: Cell<usize>,
     allocation_debt: Cell<f64>,
+    static_index: Cell<usize>,
 
     all: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
     sweep: Cell<Option<NonNull<GcBox<dyn Collect>>>>,
@@ -57,10 +71,12 @@ pub struct Context {
 
     gray: RefCell<Vec<NonNull<GcBox<dyn Collect>>>>,
     gray_again: RefCell<Vec<NonNull<GcBox<dyn Collect>>>>,
+    static_list: RefCell<Vec<NonNull<GcBox<dyn Collect>>>>,
 }
 
 impl Drop for Context {
     fn drop(&mut self) {
+        assert!(!self.shared.borrow().read_lock);
         struct DropAll(Option<NonNull<GcBox<dyn Collect>>>);
 
         impl Drop for DropAll {
@@ -77,8 +93,23 @@ impl Drop for Context {
                 }
             }
         }
-
+        self.shared.borrow_mut().alive_flag = false;
         DropAll(self.all.get());
+    }
+}
+
+#[derive(Debug)]
+pub struct SharedGcData {
+    pub alive_flag: bool,
+    pub read_lock: bool,
+}
+
+impl Default for SharedGcData {
+    fn default() -> Self {
+        Self {
+            alive_flag: true,
+            read_lock: false,
+        }
     }
 }
 
@@ -86,16 +117,19 @@ impl Context {
     pub unsafe fn new(parameters: ArenaParameters) -> Context {
         Context {
             parameters,
+            shared: Rc::new(RefCell::default()),
             phase: Cell::new(Phase::Wake),
             total_allocated: Cell::new(0),
             remembered_size: Cell::new(0),
             wakeup_total: Cell::new(0),
             allocation_debt: Cell::new(0.0),
+            static_index: Cell::new(0),
             all: Cell::new(None),
             sweep: Cell::new(None),
             sweep_prev: Cell::new(None),
             gray: RefCell::new(Vec::new()),
             gray_again: RefCell::new(Vec::new()),
+            static_list: RefCell::new(Vec::new()),
         }
     }
 
@@ -177,9 +211,18 @@ impl Context {
                         let gc_box = ptr.as_ref();
                         (*gc_box.value.get()).trace(cc);
                         gc_box.flags.set_color(GcColor::Black);
+                    } else if let Some(ptr) = self.static_list.borrow().get(self.static_index.get())
+                    {
+                        self.static_index.set(self.static_index.get() + 1);
+                        let gc_box = ptr.as_ref();
+                        if gc_box.flags.color() != GcColor::Black {
+                            (*gc_box.value.get()).trace(cc);
+                            gc_box.flags.set_color(GcColor::Black);
+                        }
                     } else {
                         // If we have no objects left in the normal gray queue, we enter the sweep
                         // phase.
+                        self.static_index.set(0);
                         self.phase.set(Phase::Sweep);
                         self.sweep.set(self.all.get());
                     }

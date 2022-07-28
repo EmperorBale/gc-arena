@@ -4,7 +4,10 @@ use rand::distributions::Distribution;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use gc_arena::{make_arena, unsafe_empty_collect, ArenaParameters, Collect, Gc, GcCell};
+use gc_arena::{
+    make_arena, static_gc, static_gc_cell, unsafe_empty_collect, ArenaParameters, Collect, Gc,
+    GcCell,
+};
 
 #[test]
 fn simple_allocation() {
@@ -23,6 +26,125 @@ fn simple_allocation() {
     arena.mutate(|_mc, root| {
         assert_eq!(*((*root).test), 42);
     });
+}
+
+#[test]
+fn static_gc() {
+    #[derive(Collect)]
+    #[collect(no_drop)]
+    struct TestRoot<'gc> {
+        test: Gc<'gc, i32>,
+    }
+
+    make_arena!(TestArena, TestRoot);
+    static_gc!(test_static, i32);
+
+    let mut arena = TestArena::new(ArenaParameters::default(), |mc| TestRoot {
+        test: Gc::allocate(mc, 42),
+    });
+
+    let mut static_arena = None;
+
+    arena.mutate(|mc, root| {
+        static_arena = Some(test_static::StaticArena::wrap(mc, root.test.clone()));
+    });
+
+    if let Some(static_arena) = static_arena {
+        static_arena.read(|root| {
+            assert_eq!(**root, 42);
+        })
+    }
+}
+
+#[test]
+#[should_panic]
+fn static_gc_early_drop() {
+    #[derive(Collect)]
+    #[collect(no_drop)]
+    struct TestRoot<'gc> {
+        test: Gc<'gc, i32>,
+    }
+
+    make_arena!(TestArena, TestRoot);
+    static_gc!(test_static, i32);
+
+    let mut arena = TestArena::new(ArenaParameters::default(), |mc| TestRoot {
+        test: Gc::allocate(mc, 42),
+    });
+
+    let mut static_arena = None;
+
+    arena.mutate(|mc, root| {
+        static_arena = Some(test_static::StaticArena::wrap(mc, root.test.clone()));
+    });
+    drop(arena);
+
+    if let Some(static_arena) = static_arena {
+        static_arena.read(|root| {
+            assert_eq!(**root, 42);
+        })
+    }
+}
+
+#[test]
+#[should_panic]
+fn static_gc_mid_drop() {
+    #[derive(Collect)]
+    #[collect(no_drop)]
+    struct TestRoot<'gc> {
+        test: Gc<'gc, i32>,
+    }
+
+    make_arena!(TestArena, TestRoot);
+    static_gc!(test_static, i32);
+
+    let mut arena = TestArena::new(ArenaParameters::default(), |mc| TestRoot {
+        test: Gc::allocate(mc, 42),
+    });
+
+    let mut static_arena = None;
+
+    arena.mutate(|mc, root| {
+        static_arena = Some(test_static::StaticArena::wrap(mc, root.test.clone()));
+    });
+
+    if let Some(static_arena) = static_arena {
+        static_arena.read(|root| {
+            drop(arena);
+            assert_eq!(**root, 42);
+        })
+    }
+}
+
+#[test]
+fn static_gc_cell() {
+    #[derive(Collect)]
+    #[collect(no_drop)]
+    struct TestRoot<'gc> {
+        test: GcCell<'gc, Vec<Gc<'gc, i32>>>,
+    }
+
+    make_arena!(TestArena, TestRoot);
+    static_gc_cell!(test_static, Vec<Gc<'gc, i32>>);
+
+    let mut arena = TestArena::new(ArenaParameters::default(), |mc| TestRoot {
+        test: GcCell::allocate(mc, vec![Gc::allocate(mc, 1), Gc::allocate(mc, 2)]),
+    });
+
+    let mut static_arena = None;
+
+    arena.mutate(|mc, root| {
+        static_arena = Some(test_static::StaticArena::wrap(mc, root.test.clone()));
+    });
+
+    if let Some(static_arena) = static_arena {
+        static_arena.read(|root| {
+            let read = root.read();
+            let mut iter = read.iter();
+            assert_eq!(**iter.next().unwrap(), 1);
+            assert_eq!(**iter.next().unwrap(), 2);
+        })
+    }
 }
 
 #[cfg(feature = "std")]

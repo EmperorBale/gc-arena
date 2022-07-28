@@ -73,4 +73,10 @@ impl<'gc, T: 'gc + Collect> Gc<'gc, T> {
     pub fn as_ptr(gc: Gc<'gc, T>) -> *const T {
         unsafe { gc.ptr.as_ref().value.get() }
     }
+
+    pub fn make_static(mc: MutationContext<'gc, '_>, gc: Gc<'gc, T>) {
+        unsafe {
+            mc.make_static(gc.ptr);
+        }
+    }
 }
