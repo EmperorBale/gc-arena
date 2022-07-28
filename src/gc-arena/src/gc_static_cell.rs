@@ -9,18 +9,6 @@ macro_rules! static_gc_cell {
                 shared: std::rc::Rc<core::cell::RefCell<$crate::SharedGcData>>,
             }
 
-            pub struct RootWrapper<'gc> {
-                root: GcCell<'gc, $typ>,
-            }
-
-            impl<'gc> std::ops::Deref for RootWrapper<'gc> {
-                type Target = GcCell<'gc, $typ>;
-
-                fn deref(&self) -> &Self::Target {
-                    &self.root
-                }
-            }
-
             impl<'gc> StaticArena<'gc> {
                 pub fn wrap(
                     mc: $crate::MutationContext<'gc, '_>,
@@ -38,14 +26,14 @@ macro_rules! static_gc_cell {
             }
 
             impl StaticArena<'static> {
-                pub fn read(&self, f: impl for<'read> FnOnce(RootWrapper<'read>)) {
+                pub fn read(&self, f: impl for<'gc> FnOnce(GcCell<'gc, $typ>)) {
                     assert!(self.shared.borrow().alive_flag);
                     if !self.shared.borrow().read_lock {
                         self.shared.borrow_mut().read_lock = true;
-                        f(RootWrapper { root: self.root });
+                        f(self.root);
                         self.shared.borrow_mut().read_lock = false;
                     } else {
-                        f(RootWrapper { root: self.root });
+                        f(self.root);
                     }
                 }
             }

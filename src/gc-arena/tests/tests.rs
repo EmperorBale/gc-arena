@@ -51,7 +51,7 @@ fn static_gc() {
 
     if let Some(static_arena) = static_arena {
         static_arena.read(|root| {
-            assert_eq!(**root, 42);
+            assert_eq!(*root, 42);
         })
     }
 }
@@ -81,7 +81,7 @@ fn static_gc_early_drop() {
 
     if let Some(static_arena) = static_arena {
         static_arena.read(|root| {
-            assert_eq!(**root, 42);
+            assert_eq!(*root, 42);
         })
     }
 }
@@ -111,7 +111,7 @@ fn static_gc_mid_drop() {
     if let Some(static_arena) = static_arena {
         static_arena.read(|root| {
             drop(arena);
-            assert_eq!(**root, 42);
+            assert_eq!(*root, 42);
         })
     }
 }
