@@ -3,7 +3,7 @@ macro_rules! static_gc {
     ($arena: ident, $typ: ty) => {
         pub mod $arena {
             use $crate::{Gc, GcCell};
-            #[derive(Debug)]
+            #[derive(Debug, Clone)]
             pub struct StaticArena<'gc> {
                 root: Gc<'gc, $typ>,
                 shared: std::rc::Rc<core::cell::RefCell<$crate::SharedGcData>>,
