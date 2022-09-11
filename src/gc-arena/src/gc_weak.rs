@@ -25,7 +25,9 @@ impl<'gc, T: 'gc + Collect> Debug for GcWeak<'gc, T> {
 unsafe impl<'gc, T: 'gc + Collect> Collect for GcWeak<'gc, T> {
     fn trace(&self, _cc: CollectionContext) {
         unsafe {
-            self.inner.ptr.as_ref().flags.set_has_weak_ref(true);
+            let gc = self.inner.ptr.as_ref();
+            gc.flags.set_has_weak_ref(true);
+            gc.flags.set_freshly_allocated(false);
         }
     }
 }

@@ -24,12 +24,10 @@ impl<'gc, T: 'gc + Collect> Debug for GcWeakCell<'gc, T> {
 unsafe impl<'gc, T: 'gc + Collect> Collect for GcWeakCell<'gc, T> {
     fn trace(&self, _cc: crate::CollectionContext) {
         unsafe {
-            self.inner
-                .get_inner()
-                .ptr
-                .as_ref()
-                .flags
-                .set_has_weak_ref(true);
+            let gc = self.inner.get_inner().ptr.as_ref();
+
+            gc.flags.set_has_weak_ref(true);
+            gc.flags.set_freshly_allocated(false);
         }
     }
 }

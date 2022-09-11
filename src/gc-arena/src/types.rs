@@ -66,7 +66,7 @@ impl GcFlags {
     }
 
     #[inline]
-    pub(crate) fn switch(&self) -> bool {
+    pub(crate) fn freshly_allocated(&self) -> bool {
         self.0.get() & 0x20 != 0x0
     }
 
@@ -89,9 +89,9 @@ impl GcFlags {
     }
 
     #[inline]
-    pub(crate) fn set_switch(&self, switch: bool) {
+    pub(crate) fn set_freshly_allocated(&self, freshly_allocated: bool) {
         self.0
-            .set((self.0.get() & !0x20) | if switch { 0x20 } else { 0x0 });
+            .set((self.0.get() & !0x20) | if freshly_allocated { 0x20 } else { 0x0 });
     }
 }
 
