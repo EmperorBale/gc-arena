@@ -200,7 +200,9 @@ impl Context {
                         // If the next object in the sweep list is white, we need to remove it from
                         // the main list and destruct it, otherwise it should be black, and we
                         // simply turn it white again.
-                        if sweep.flags.color() == GcColor::White {
+                        if sweep.flags.color() == GcColor::White
+                            || sweep.flags.color() == GcColor::FreshWhite
+                        {
                             if sweep.flags.has_weak_ref() {
                                 self.sweep_prev.set(Some(sweep_ptr));
                                 sweep.flags.set_has_weak_ref(false);
@@ -294,7 +296,6 @@ impl Context {
 
         let flags = GcFlags::new();
         flags.set_alive(true);
-        flags.set_freshly_allocated(true);
         flags.set_needs_trace(T::needs_trace());
 
         // Make the generated code easier to optimize into `T` being constructed in place or at the
@@ -339,10 +340,9 @@ impl Context {
 
     unsafe fn trace<T: Collect>(&self, ptr: NonNull<GcBox<T>>) {
         let gc_box = ptr.as_ref();
-        gc_box.flags.set_freshly_allocated(false);
         match gc_box.flags.color() {
             GcColor::Black | GcColor::Gray => {}
-            GcColor::White => {
+            GcColor::White | GcColor::FreshWhite => {
                 if gc_box.flags.needs_trace() {
                     // A white traceable object is not in the gray queue, becomes gray and enters
                     // the normal gray queue.
@@ -370,10 +370,7 @@ impl Context {
 
         // If we are in the sweep phase, the color is white, and we are not freshly allocated, then that means this object will
         // be swept soon, so we cannot upgrade.
-        if self.phase.get() == Phase::Sweep
-            && gc_box.flags.color() == GcColor::White
-            && !gc_box.flags.freshly_allocated()
-        {
+        if self.phase.get() == Phase::Sweep && gc_box.flags.color() == GcColor::White {
             return false;
         }
         true

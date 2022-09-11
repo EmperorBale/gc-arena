@@ -1,3 +1,4 @@
+use crate::types::GcColor;
 use crate::GcCell;
 use crate::{collect::Collect, MutationContext};
 
@@ -27,7 +28,9 @@ unsafe impl<'gc, T: 'gc + Collect> Collect for GcWeakCell<'gc, T> {
             let gc = self.inner.get_inner().ptr.as_ref();
 
             gc.flags.set_has_weak_ref(true);
-            gc.flags.set_freshly_allocated(false);
+            if gc.flags.color() == GcColor::FreshWhite {
+                gc.flags.set_color(GcColor::White);
+            }
         }
     }
 }

@@ -39,6 +39,7 @@ fn weak_allocation() {
     let mut arena = TestArena::new(ArenaParameters::default(), |mc| {
         let test = Gc::allocate(mc, 42);
         let weak = Gc::downgrade(test);
+        assert!(weak.upgrade(mc).is_some());
         TestRoot {
             test: GcCell::allocate(mc, Some(test)),
             weak,

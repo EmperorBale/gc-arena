@@ -6,6 +6,7 @@ use crate::collect::Collect;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum GcColor {
+    FreshWhite,
     White,
     Gray,
     Black,
@@ -28,13 +29,11 @@ impl GcFlags {
     #[inline]
     pub(crate) fn color(&self) -> GcColor {
         match self.0.get() & 0x3 {
-            0x0 => GcColor::White,
-            0x1 => GcColor::Gray,
-            0x2 => GcColor::Black,
-            // this is needed for the compiler to codegen a simple AND.
-            // SAFETY: only possible extra value is 0x3,
-            // and the only place where we set these bits is in set_color
-            _ => unsafe { std::hint::unreachable_unchecked() },
+            0x0 => GcColor::FreshWhite,
+            0x1 => GcColor::White,
+            0x2 => GcColor::Gray,
+            0x3 => GcColor::Black,
+            _ => unreachable!(),
         }
     }
 
@@ -43,9 +42,10 @@ impl GcFlags {
         self.0.set(
             (self.0.get() & !0x3)
                 | match color {
-                    GcColor::White => 0x0,
-                    GcColor::Gray => 0x1,
-                    GcColor::Black => 0x2,
+                    GcColor::FreshWhite => 0x0,
+                    GcColor::White => 0x1,
+                    GcColor::Gray => 0x2,
+                    GcColor::Black => 0x3,
                 },
         )
     }
@@ -66,11 +66,6 @@ impl GcFlags {
     }
 
     #[inline]
-    pub(crate) fn freshly_allocated(&self) -> bool {
-        self.0.get() & 0x20 != 0x0
-    }
-
-    #[inline]
     pub(crate) fn set_needs_trace(&self, needs_trace: bool) {
         self.0
             .set((self.0.get() & !0x4) | if needs_trace { 0x4 } else { 0x0 });
@@ -86,12 +81,6 @@ impl GcFlags {
     pub(crate) fn set_alive(&self, alive: bool) {
         self.0
             .set((self.0.get() & !0x10) | if alive { 0x10 } else { 0x0 });
-    }
-
-    #[inline]
-    pub(crate) fn set_freshly_allocated(&self, freshly_allocated: bool) {
-        self.0
-            .set((self.0.get() & !0x20) | if freshly_allocated { 0x20 } else { 0x0 });
     }
 }
 
