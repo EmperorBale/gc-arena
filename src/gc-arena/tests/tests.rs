@@ -55,10 +55,19 @@ fn weak_allocation() {
 
         *root.test.write(mc) = None;
     });
-    arena.collect_all();
-    arena.mutate(|mc, root| {
-        assert!((*root).weak.upgrade(mc).is_none());
-    });
+    let mut done = false;
+    while !done {
+        arena.mutate(|mc, root| {
+            // keep allocating objects to ensure the GC is triggered
+            Gc::allocate(mc, 0);
+            if let Some(gc) = root.weak.upgrade(mc) {
+                assert_eq!(*gc, 42);
+            } else {
+                done = true;
+            }
+        });
+        arena.collect_debt();
+    }
 }
 
 #[cfg(feature = "std")]
